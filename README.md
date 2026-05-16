@@ -1,6 +1,6 @@
 # Ficha Clínica · Psiquiatría
 
-Plantilla interactiva para evaluación psiquiátrica diseñada para uso clínico estudiantil. Genera automáticamente texto narrativo para ficha clínica a partir de selecciones rápidas tipo chip.
+Plantilla interactiva para evaluación psiquiátrica diseñada para uso clínico estudiantil. Genera automáticamente texto narrativo para ficha clínica a partir de selecciones rápidas tipo chip. A diferencia de calculadoras aisladas como MDCalc o sistemas empresariales como PsyQuation, esta plantilla está diseñada específicamente para estudiantes de medicina en rotación de psiquiatría en Chile, con terminología MINSAL y generación automática de narrativa clínica lista para copiar en la ficha del paciente.
 
 ## ✨ Características
 
@@ -22,17 +22,6 @@ Plantilla interactiva para evaluación psiquiátrica diseñada para uso clínico
 4. Presiona **⚙ Generar texto** para obtener los párrafos narrativos
 5. Usa **📋 Copiar texto** para pegar en la ficha clínica del paciente
 6. Usa **📄 Descargar PDF** para guardar el formulario completo
-
-## 🛠 Cómo publicarla en GitHub Pages
-
-1. Crea un repositorio nuevo en GitHub (puede llamarse `ficha-psiquiatria`)
-2. Sube el archivo `index.html` a la raíz del repositorio
-3. Ve a **Settings → Pages**
-4. En "Source" selecciona la rama **main** (o `master`) y carpeta `/ (root)`
-5. Guarda. En 1–2 minutos tu página estará disponible en:
-   ```
-   https://[tu-usuario].github.io/ficha-psiquiatria/
-   ```
 
 ## ⚖️ Uso
 
