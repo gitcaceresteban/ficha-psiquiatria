@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ficha Clínica · Psiquiatría</title>
+<meta name="description" content="Plantilla interactiva de evaluación psiquiátrica: anamnesis, examen mental y generación automática de texto para ficha clínica.">
+
+<!-- Librerías para generar PDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:#eef1f6;min-height:100vh;font-family:'Source Sans 3',sans-serif;color:#1a1a1a}
+
+/* Barra superior con acciones */
+.topbar{position:sticky;top:0;z-index:100;background:#1e3060;color:white;padding:10px 20px;box-shadow:0 2px 8px rgba(0,0,0,.12);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.topbar h1{font-size:14px;font-weight:700;letter-spacing:.4px}
+.topbar h1 span{font-size:11px;font-weight:400;opacity:.75;margin-left:8px}
+.topbar-actions{display:flex;gap:6px;flex-wrap:wrap}
+.tb-btn{background:rgba(255,255,255,.15);color:white;border:1px solid rgba(255,255,255,.25);border-radius:5px;padding:6px 12px;font-size:11px;cursor:pointer;font-family:inherit;font-weight:600;display:inline-flex;align-items:center;gap:5px;transition:background .15s}
+.tb-btn:hover{background:rgba(255,255,255,.28)}
+.tb-btn.primary{background:#1a5e3a;border-color:#1a5e3a}
+.tb-btn.primary:hover{background:#144d30}
+.tb-btn.danger{background:rgba(163,45,45,.7);border-color:rgba(255,160,160,.4)}
+.tb-btn.danger:hover{background:rgba(163,45,45,.95)}
+
+/* Toast */
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1a5e3a;color:white;padding:9px 18px;border-radius:6px;font-size:12px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.18);opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;z-index:1000}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(-4px)}
+
+/* Contenedor de la hoja */
+.page-wrap{padding:18px 12px 60px;display:flex;justify-content:center}
+.sheet{font-size:10.5px;color:#1a1a1a;background:white;width:760px;max-width:100%;padding:14px 18px 12px;border-radius:8px;box-shadow:0 4px 20px rgba(30,48,96,.1)}
+
+.main-header{background:#1e3060;color:white;border-radius:6px 6px 0 0;padding:8px 14px;display:flex;justify-content:space-between;align-items:center;margin-bottom:0;flex-wrap:wrap;gap:6px}
+.main-header h2{font-size:13px;font-weight:700;letter-spacing:.4px}
+.main-header p{font-size:9px;opacity:.78;margin-top:1px}
+.hdate{font-size:9px;opacity:.85;text-align:right}
+.hdate input{background:rgba(255,255,255,.15);border:none;color:white;border-radius:3px;padding:1px 5px;font-size:9.5px;font-family:inherit;width:130px;margin-left:3px}
+.hdate input::placeholder{color:rgba(255,255,255,.6)}
+
+.sec-title{background:#2c3e6b;color:white;font-size:9.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;padding:4px 9px;margin:8px 0 5px;border-radius:3px}
+.sec-title.green{background:#1a5e3a}
+.sec-title.purple{background:#4a2c6b}
+
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:5px}
+.g4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin-bottom:5px}
+@media (max-width:600px){
+  .g2,.g4{grid-template-columns:1fr 1fr}
+  .topbar h1 span{display:none}
+}
+
+.field{display:flex;flex-direction:column;gap:1px}
+.field label{font-size:8.5px;font-weight:700;color:#2c3e6b;text-transform:uppercase;letter-spacing:.3px}
+.field input,.field textarea{border:none;border-bottom:.5px solid #bbb;font-size:10px;font-family:inherit;background:transparent;outline:none;color:#1a1a1a;padding:1px 2px;width:100%;resize:none;transition:border-color .15s}
+.field input:focus,.field textarea:focus{border-bottom-color:#1e3060;border-bottom-width:1px}
+.field textarea{border:.5px solid #ccc;border-radius:3px;padding:3px 4px;margin-top:1px;min-height:28px}
+.field textarea:focus{border-color:#1e3060}
+
+.card{border:.5px solid #c5cde8;border-radius:5px;padding:6px 8px;background:white;margin-bottom:5px}
+.ct{font-size:9.5px;font-weight:700;color:#2c3e6b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;display:flex;align-items:center;gap:5px}
+.ct.green{color:#1a5e3a} .ct.purple{color:#4a2c6b}
+.num{background:#2c3e6b;color:white;border-radius:50%;width:15px;height:15px;display:inline-flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:700;flex-shrink:0}
+.num.green{background:#1a5e3a} .num.purple{background:#4a2c6b}
+
+.row{display:flex;flex-wrap:wrap;gap:3px;margin-bottom:3px;align-items:center}
+.sl{font-size:8.5px;color:#777;font-style:italic;margin-right:2px;white-space:nowrap}
+.chip{font-size:9.5px;color:#2c3e6b;cursor:pointer;padding:2px 7px;border-radius:3px;border:.5px solid #c5cde8;user-select:none;white-space:nowrap;background:white;transition:all .12s}
+.chip:hover{background:#e8ecf8;border-color:#9eafe0}
+.chip.sel{background:#2c3e6b;color:white;border-color:#2c3e6b}
+.chip.sel.green{background:#1a5e3a;border-color:#1a5e3a}
+.chip.sel.purple{background:#4a2c6b;border-color:#4a2c6b}
+.chip.red{color:#a32d2d;border-color:#f0a0a0;background:white}
+.chip.red:hover{background:#fce8e8}
+.chip.red.sel{background:#a32d2d;color:white;border-color:#a32d2d}
+
+.tt{position:relative;display:inline-block}
+.tt .tip{visibility:hidden;width:215px;background:#1e3060;color:white;font-size:9px;border-radius:4px;padding:6px 8px;position:absolute;z-index:50;bottom:135%;left:50%;transform:translateX(-50%);opacity:0;transition:opacity .15s;pointer-events:none;line-height:1.45;font-style:normal;font-weight:400;text-transform:none;letter-spacing:0}
+.tt .tip::after{content:'';position:absolute;top:100%;left:50%;margin-left:-4px;border:4px solid transparent;border-top-color:#1e3060}
+.tt:hover .tip{visibility:visible;opacity:1}
+
+.obs{width:100%;border:none;border-bottom:.5px dashed #bbb;font-size:9.5px;font-family:inherit;color:#1a1a1a;background:transparent;outline:none;margin-top:4px;display:block;padding:1px 2px;transition:border-color .15s}
+.obs:focus{border-bottom:1px solid #1e3060}
+
+.ap-box{background:#f0f3fa;border-left:3px solid #1e3060;border-radius:4px;padding:6px 10px;margin-bottom:5px}
+.dg-box{background:#f5f0fa;border-left:3px solid #4a2c6b;border-radius:4px;padding:6px 10px;margin-bottom:5px}
+.dg-tit{font-size:9.5px;font-weight:700;color:#4a2c6b;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px}
+
+.anam-area{width:100%;border:.5px solid #c5cde8;border-radius:3px;padding:4px 6px;font-size:9.5px;font-family:inherit;outline:none;resize:vertical;min-height:30px;background:white;transition:border-color .15s}
+.anam-area:focus{border-color:#1e3060}
+
+.suic-sub{display:none;margin-top:4px;padding:5px 7px;border-left:2px solid #f0a0a0;background:#fff8f8;border-radius:0 4px 4px 0}
+.suic-sub.show{display:block}
+
+/* Botones de acción inferior */
+.actions-row{margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.gen-btn{background:#1a5e3a;color:white;border:none;border-radius:5px;padding:8px 20px;font-size:11.5px;cursor:pointer;font-family:inherit;font-weight:700;display:flex;align-items:center;gap:6px;transition:background .15s}
+.gen-btn:hover{background:#144d30}
+.gen-hint{font-size:9.5px;color:#777;font-style:italic}
+
+/* Caja de output */
+.output-box{border:1.5px solid #1a5e3a;border-radius:6px;padding:12px 14px;margin-top:10px;background:#f4faf7;display:none}
+.output-box.show{display:block}
+.output-box h3{font-size:10.5px;font-weight:700;color:#1a5e3a;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px}
+.output-text{font-size:11px;line-height:1.7;color:#1a1a1a;white-space:pre-wrap;font-family:'Source Sans 3',sans-serif}
+.copy-btn{background:#1a5e3a;color:white;border:none;border-radius:3px;padding:4px 12px;font-size:9.5px;cursor:pointer;font-family:inherit;font-weight:700}
+.copy-btn:hover{background:#144d30}
+
+/* Footer */
+.footer{border-top:1px solid #ddd;margin-top:10px;padding-top:7px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
+.sign-row{display:flex;gap:28px;flex-wrap:wrap}
+.sign{display:flex;flex-direction:column;align-items:center;gap:2px}
+.sign-line{width:110px;height:1px;background:#bbb}
+.sign-label{font-size:8.5px;color:#888}
+
+/* Info de versión / repo */
+.repo-foot{text-align:center;color:#777;font-size:10px;padding:14px 0 22px}
+.repo-foot a{color:#2c3e6b;text-decoration:none;font-weight:600}
+.repo-foot a:hover{text-decoration:underline}
+
+/* Print y PDF capture */
+@media print{
+  .topbar,.actions-row,.output-box,.repo-foot,.tb-btn{display:none!important}
+  body{background:white}
+  .page-wrap{padding:0}
+  .sheet{box-shadow:none;width:100%;padding:5mm 8mm;border-radius:0}
+  .tt .tip{display:none!important}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+
+/* Modo captura PDF: oculta elementos no impresos */
+body.pdf-mode .topbar,
+body.pdf-mode .actions-row,
+body.pdf-mode .repo-foot{display:none!important}
+body.pdf-mode .page-wrap{padding:0}
+body.pdf-mode .sheet{box-shadow:none;border-radius:0;width:760px}
+
+/* Spinner overlay para PDF */
+.overlay{position:fixed;inset:0;background:rgba(30,48,96,.85);z-index:9999;display:none;align-items:center;justify-content:center;flex-direction:column;color:white;gap:12px}
+.overlay.show{display:flex}
+.spinner{width:42px;height:42px;border:4px solid rgba(255,255,255,.25);border-top-color:white;border-radius:50%;animation:spin .9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.overlay-text{font-size:13px;font-weight:600}
+</style>
+</head>
+<body>
+
+<!-- Barra superior -->
+<div class="topbar">
+  <h1>📋 Ficha Clínica · Psiquiatría <span>Anamnesis · Examen Mental · Diagnóstico</span></h1>
+  <div class="topbar-actions">
+    <button class="tb-btn primary" onclick="generar()">⚙ Generar texto</button>
+    <button class="tb-btn" onclick="descargarPDF()">📄 Descargar PDF</button>
+    <button class="tb-btn" onclick="window.print()">🖨 Imprimir</button>
+    <button class="tb-btn danger" onclick="resetForm()">↺ Limpiar</button>
+  </div>
+</div>
+
+<!-- Toast notification -->
+<div class="toast" id="toast"></div>
+
+<!-- Overlay generación PDF -->
+<div class="overlay" id="pdfOverlay">
+  <div class="spinner"></div>
+  <div class="overlay-text">Generando PDF...</div>
+</div>
+
+<div class="page-wrap">
+<div class="sheet" id="sheet">
+
+<div class="main-header">
+  <div><h2>Ficha Clínica — Psiquiatría</h2><p>Anamnesis · Examen Mental · Diagnóstico · Rotación clínica</p></div>
+  <div class="hdate">
+    Fecha: <input id="f_fecha" placeholder="dd/mm/aaaa"><br>
+    Institución: <input id="f_institucion" placeholder="...">
+  </div>
+</div>
+
+<div class="sec-title">I. Identificación del paciente</div>
+<div class="g4">
+  <div class="field"><label>Nombre completo</label><input id="f_nombre" placeholder=""></div>
+  <div class="field"><label>Edad</label><input id="f_edad" placeholder="años"></div>
+  <div class="field"><label>Sexo biológico</label><input id="f_sexo" placeholder=""></div>
+  <div class="field"><label>Estado civil</label><input id="f_ecivil" placeholder=""></div>
+</div>
+<div class="g4">
+  <div class="field"><label>Género / Orientación</label><input id="f_genero" placeholder=""></div>
+  <div class="field"><label>Escolaridad</label><input id="f_escolar" placeholder=""></div>
+  <div class="field"><label>Ocupación</label><input id="f_ocup" placeholder=""></div>
+  <div class="field"><label>Procedencia</label><input id="f_proc" placeholder=""></div>
+</div>
+<div class="field" style="margin-bottom:5px"><label>Motivo de consulta (MC)</label><textarea class="anam-area" id="f_mc" rows="1" placeholder="En palabras del paciente..."></textarea></div>
+
+<div class="sec-title">II. Anamnesis próxima (cuadro actual)</div>
+<div class="g2" style="margin-bottom:4px">
+  <div class="field"><label>Inicio</label><input id="f_inicio" placeholder="fecha / período aproximado"></div>
+  <div class="field"><label>Duración</label><input id="f_dur" placeholder="días / semanas / meses"></div>
+</div>
+<div class="field" style="margin-bottom:4px"><label>Síntomas principales</label><textarea class="anam-area" id="f_sint" rows="2" placeholder="Describir cronológicamente..."></textarea></div>
+<div class="g2">
+  <div class="field"><label>Factores desencadenantes</label><textarea class="anam-area" id="f_desenc" rows="1" placeholder=""></textarea></div>
+  <div class="field"><label>Diagnóstico y tratamiento previo</label><textarea class="anam-area" id="f_tto" rows="1" placeholder=""></textarea></div>
+</div>
+
+<div class="sec-title">III. Anamnesis remota</div>
+<div class="g2">
+  <div class="card">
+    <div class="ct">Antecedentes personales</div>
+    <div class="field" style="margin-bottom:4px"><label>Somáticos</label><textarea class="anam-area" id="f_som" rows="1" placeholder="HTA, DM, epilepsia, TEC..."></textarea></div>
+    <div class="field" style="margin-bottom:4px"><label>Psiquiátricos — diagnóstico y tratamiento</label><textarea class="anam-area" id="f_psi" rows="1" placeholder=""></textarea></div>
+    <div class="field" style="margin-bottom:4px"><label>Consumo de sustancias</label><textarea class="anam-area" id="f_sust" rows="1" placeholder="Tipo, frecuencia, última vez"></textarea></div>
+    <div class="field"><label>Conductas adictivas (sin sustancia)</label><textarea class="anam-area" id="f_adic" rows="1" placeholder="Juego, internet..."></textarea></div>
+  </div>
+  <div class="card">
+    <div class="ct">Antecedentes familiares</div>
+    <div class="field" style="margin-bottom:4px"><label>Trastornos psiquiátricos</label><textarea class="anam-area" id="f_fampsi" rows="1" placeholder=""></textarea></div>
+    <div class="field" style="margin-bottom:4px"><label>Suicidio / intentos en familia</label><textarea class="anam-area" id="f_famsui" rows="1" placeholder=""></textarea></div>
+    <div class="field" style="margin-bottom:4px"><label>Consumo de sustancias familiar</label><textarea class="anam-area" id="f_famsust" rows="1" placeholder=""></textarea></div>
+    <div class="field" style="margin-bottom:4px"><label>Enfermedades médicas de relevancia psiquiátrica</label><textarea class="anam-area" id="f_fammed" rows="1" placeholder=""></textarea></div>
+    <div class="field"><label>Alteración conductual no diagnosticada</label><textarea class="anam-area" id="f_famcond" rows="1" placeholder=""></textarea></div>
+  </div>
+</div>
+
+<div class="sec-title green">IV. Examen mental</div>
+
+<div class="ap-box">
+  <div class="ct green" style="margin-bottom:5px"><span class="num green">A</span>Apariencia</div>
+  <div class="row">
+    <span class="sl">Somatotipo:</span>
+    <span class="chip" data-g="soma" onclick="tog(this)">Ectomorfo</span>
+    <span class="chip" data-g="soma" onclick="tog(this)">Mesomorfo</span>
+    <span class="chip" data-g="soma" onclick="tog(this)">Endomorfo</span>
+    <span class="sl" style="margin-left:8px">Nutrición:</span>
+    <span class="chip" data-g="nutri" onclick="tog(this)">Eutrófico</span>
+    <span class="chip" data-g="nutri" onclick="tog(this)">Desnutrido</span>
+    <span class="chip" data-g="nutri" onclick="tog(this)">Sobrepeso</span>
+  </div>
+  <div class="row">
+    <span class="sl">Vestimenta:</span>
+    <span class="chip" data-g="vest" onclick="tog(this)">Acorde al clima y situación</span>
+    <span class="chip" data-g="vest" onclick="tog(this)">Inadecuada</span>
+    <span class="chip" data-g="vest" onclick="tog(this)">Extravagante</span>
+    <span class="chip" data-g="vest" onclick="tog(this)">Descuidada</span>
+    <span class="sl" style="margin-left:8px">Higiene:</span>
+    <span class="chip" data-g="hig" onclick="tog(this)">Conservada</span>
+    <span class="chip" data-g="hig" onclick="tog(this)">Descuidada</span>
+    <span class="chip" data-g="hig" onclick="tog(this)">Abandono total</span>
+  </div>
+  <div class="row">
+    <span class="sl">Accesorios:</span>
+    <input id="f_acces" class="obs" style="width:220px;display:inline-block" placeholder="describir...">
+    <span class="sl" style="margin-left:10px">Otras observaciones:</span>
+    <input id="f_ap_obs" class="obs" style="width:170px;display:inline-block" placeholder="">
+  </div>
+</div>
+
+<div class="g2">
+  <div class="card">
+    <div class="ct green"><span class="num green">1</span>Conducta</div>
+    <div class="row"><span class="sl">Actitud:</span>
+      <span class="chip" data-g="actitud" onclick="tog(this)">Cooperador</span>
+      <span class="chip" data-g="actitud" onclick="tog(this)">Hostil</span>
+      <span class="chip" data-g="actitud" onclick="tog(this)">Negativista</span>
+      <span class="chip" data-g="actitud" onclick="tog(this)">Seductor</span>
+      <span class="chip" data-g="actitud" onclick="tog(this)">Indiferente</span>
+    </div>
+    <div class="row"><span class="sl">Contacto visual:</span>
+      <span class="chip" data-g="cv" onclick="tog(this)">Sostenido</span>
+      <span class="chip" data-g="cv" onclick="tog(this)">Entrecortado</span>
+      <span class="chip" data-g="cv" onclick="tog(this)">Evasivo</span>
+      <span class="chip" data-g="cv" onclick="tog(this)">Ausente</span>
+    </div>
+    <div class="row"><span class="sl">Postura:</span>
+      <span class="chip" data-g="post" onclick="tog(this)">Relajada</span>
+      <span class="chip" data-g="post" onclick="tog(this)">Tensa</span>
+      <span class="chip" data-g="post" onclick="tog(this)">Agitada</span>
+      <span class="chip" data-g="post" onclick="tog(this)">Rígida</span>
+    </div>
+    <div class="row">
+      <span class="chip red" data-g="conda" onclick="tog(this)">Conducta alarmante</span>
+      <span class="chip" data-g="conda" onclick="tog(this)">Sin alteraciones conductuales</span>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ct green"><span class="num green">2</span>Psicomotricidad</div>
+    <div class="row"><span class="sl">Concordancia:</span>
+      <span class="chip" data-g="conc" onclick="tog(this)">Ideomotora conservada</span>
+      <span class="chip" data-g="conc" onclick="tog(this)">Ideomotora discordante</span>
+    </div>
+    <div class="row"><span class="sl">Nivel:</span>
+      <span class="chip" data-g="pm_niv" onclick="tog(this)">Normal</span>
+      <span class="chip" data-g="pm_niv" onclick="tog(this)">Hipokinesia</span>
+      <span class="chip" data-g="pm_niv" onclick="tog(this)">Hiperkinesia</span>
+      <span class="chip" data-g="pm_niv" onclick="tog(this)">Agitación psicomotora</span>
+    </div>
+    <div class="row"><span class="sl">Gestos:</span>
+      <span class="chip" data-g="gest" onclick="tog(this)">Gesticulación presente</span>
+      <span class="chip" data-g="gest" onclick="tog(this)">Gesticulación escasa</span>
+      <span class="chip" data-g="gest" onclick="tog(this)">Sin gesticulación</span>
+      <span class="tt"><span class="chip" data-g="gest" onclick="tog(this)">Estereotipias</span><span class="tip">Movimientos repetitivos, rítmicos y sin propósito aparente. Ej: balanceo, frotamiento de manos. Frecuentes en esquizofrenia y TEA.</span></span>
+      <span class="chip" data-g="gest" onclick="tog(this)">Manierismos</span>
+    </div>
+    <div class="row"><span class="sl">Uso del espacio:</span>
+      <span class="chip" data-g="esp" onclick="tog(this)">No usa espacio de la consulta</span>
+      <span class="chip" data-g="esp" onclick="tog(this)">Deambula por la consulta</span>
+      <span class="chip" data-g="esp" onclick="tog(this)">Amplio uso del espacio</span>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="ct green"><span class="num green">3</span>Pensamiento</div>
+  <div class="g2" style="gap:8px;margin-bottom:0">
+    <div>
+      <div class="row"><span class="sl">Estructura:</span>
+        <span class="chip" data-g="pens_est" onclick="tog(this)">Sin alteraciones</span>
+        <span class="tt"><span class="chip" data-g="pens_est" onclick="tog(this)">Pensamiento laxo</span><span class="tip">Asociaciones entre ideas débiles o ilógicas sin llegar a la incoherencia. La cadena asociativa se mantiene pero con conexiones frágiles. Precede a la disgregación.</span></span>
+        <span class="tt"><span class="chip" data-g="pens_est" onclick="tog(this)">Tangencial</span><span class="tip">El pensamiento se desvía del tema permanentemente sin retornar al objetivo. A diferencia del circunstancial, nunca llega al punto.</span></span>
+        <span class="tt"><span class="chip" data-g="pens_est" onclick="tog(this)">Circunstancial</span><span class="tip">Pensamiento que llega al objetivo pero con excesivos rodeos y detalles innecesarios. A diferencia del tangencial, sí llega al punto.</span></span>
+        <span class="tt"><span class="chip" data-g="pens_est" onclick="tog(this)">Fuga de ideas</span><span class="tip">Aceleración con salto constante entre ideas por asociaciones superficiales (rima, contigüidad). Característico de episodio maníaco.</span></span>
+        <span class="tt"><span class="chip" data-g="pens_est" onclick="tog(this)">Bloqueo</span><span class="tip">Interrupción brusca e involuntaria del hilo de pensamiento. El paciente detiene el discurso abruptamente. Asociado a robo del pensamiento en esquizofrenia.</span></span>
+        <span class="chip" data-g="pens_est" onclick="tog(this)">Bradipsiquia</span>
+        <span class="chip" data-g="pens_est" onclick="tog(this)">Disgregación</span>
+        <span class="chip" data-g="pens_est" onclick="tog(this)">Incoherencia</span>
+      </div>
+    </div>
+    <div>
+      <div class="row"><span class="sl">Contenido:</span>
+        <span class="chip" data-g="pens_cont" onclick="tog(this)">Sin alteraciones</span>
+        <span class="chip" data-g="pens_cont" onclick="tog(this)">Ideas obsesivas</span>
+        <span class="chip" data-g="pens_cont" onclick="tog(this)">Ideas fóbicas</span>
+        <span class="chip" data-g="pens_cont" onclick="tog(this)">Ideas sobrevaloradas</span>
+        <span class="tt"><span class="chip" data-g="pens_cont" onclick="tog(this)">Idea delirante</span><span class="tip">Creencia falsa, incorregible y no compartida por el entorno cultural. Puede ser primaria (surge sin base) o secundaria (deriva de otra vivencia psicopatológica, ej: alucinación).</span></span>
+        <span class="tt"><span class="chip" data-g="pens_cont" onclick="tog(this)">Delirio estructurado</span><span class="tip">Sistema delirante internamente coherente y elaborado. El paciente construye una narrativa organizada y consistente. Más frecuente en trastorno paranoide.</span></span>
+        <span class="tt"><span class="chip" data-g="pens_cont" onclick="tog(this)">Robo del pensamiento</span><span class="tip">Vivencia de que los propios pensamientos son extraídos por una fuerza externa. Síntoma de primer rango de Schneider. Característico de esquizofrenia.</span></span>
+      </div>
+      <div class="row"><span class="sl">Tipo de delirio:</span>
+        <span class="chip" data-g="tipo_del" onclick="tog(this)">Persecución</span>
+        <span class="chip" data-g="tipo_del" onclick="tog(this)">Grandiosidad</span>
+        <span class="chip" data-g="tipo_del" onclick="tog(this)">Referencia</span>
+        <span class="chip" data-g="tipo_del" onclick="tog(this)">Somático</span>
+        <span class="chip" data-g="tipo_del" onclick="tog(this)">Celotípico</span>
+        <span class="chip" data-g="tipo_del" onclick="tog(this)">Erotimaníaco</span>
+      </div>
+    </div>
+  </div>
+  <input id="f_pens_obs" class="obs" placeholder="Describir contenido específico del pensamiento (si aplica)...">
+</div>
+
+<div class="card">
+  <div class="ct green"><span class="num green">4</span>Percepción</div>
+  <div class="row">
+    <span class="chip" data-g="perc" onclick="tog(this)">Sin alteraciones</span>
+    <span class="chip" data-g="perc" onclick="tog(this)">Alucinaciones auditivas</span>
+    <span class="chip" data-g="perc" onclick="tog(this)">Alucinaciones visuales</span>
+    <span class="chip" data-g="perc" onclick="tog(this)">Alucinaciones olfatorias</span>
+    <span class="chip" data-g="perc" onclick="tog(this)">Alucinaciones táctiles</span>
+    <span class="chip" data-g="perc" onclick="tog(this)">Ilusiones</span>
+    <span class="chip" data-g="perc" onclick="tog(this)">Pseudoalucinaciones</span>
+  </div>
+  <div class="row"><span class="sl">Carácter de la voz:</span>
+    <span class="chip" data-g="voz" onclick="tog(this)">Imperativa</span>
+    <span class="chip" data-g="voz" onclick="tog(this)">Comentadora</span>
+    <span class="chip" data-g="voz" onclick="tog(this)">Dialogante</span>
+    <span class="chip" data-g="voz" onclick="tog(this)">Masculina</span>
+    <span class="chip" data-g="voz" onclick="tog(this)">Femenina</span>
+  </div>
+  <input id="f_perc_obs" class="obs" placeholder='Describir fenómeno perceptual, ej: "voz masculina que ordena..."'>
+</div>
+
+<div class="g2">
+  <div class="card">
+    <div class="ct green"><span class="num green">5</span>Estado de conciencia</div>
+    <div class="row"><span class="sl">Nivel cuant.:</span>
+      <span class="chip" data-g="conc_niv" onclick="tog(this)">Consciente</span>
+      <span class="chip" data-g="conc_niv" onclick="tog(this)">Obnubilado</span>
+      <span class="chip" data-g="conc_niv" onclick="tog(this)">Sopor superficial</span>
+      <span class="chip" data-g="conc_niv" onclick="tog(this)">Sopor profundo</span>
+      <span class="chip" data-g="conc_niv" onclick="tog(this)">Coma</span>
+    </div>
+    <div class="row"><span class="sl">Lucidez:</span>
+      <span class="chip" data-g="lucid" onclick="tog(this)">Conservada</span>
+      <span class="chip" data-g="lucid" onclick="tog(this)">Pérdida de lucidez</span>
+      <span class="chip" data-g="lucid" onclick="tog(this)">Estado confusional</span>
+    </div>
+    <div class="row"><span class="sl">Orientación:</span>
+      <span class="chip" data-g="orient" onclick="tog(this)">T/E/P conservada</span>
+      <span class="chip" data-g="orient" onclick="tog(this)">Desorientación temporal</span>
+      <span class="chip" data-g="orient" onclick="tog(this)">Desorientación espacial</span>
+      <span class="chip" data-g="orient" onclick="tog(this)">Desorientación personal</span>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ct green"><span class="num green">6</span>FCS <span style="font-weight:400;font-size:8.5px;color:#777">(Funciones cognitivas superiores)</span></div>
+    <div class="row"><span class="sl">Atención:</span>
+      <span class="chip" data-g="aten" onclick="tog(this)">Sin alteraciones</span>
+      <span class="chip" data-g="aten" onclick="tog(this)">Inatento</span>
+      <span class="chip" data-g="aten" onclick="tog(this)">Requiere repetición</span>
+      <span class="chip" data-g="aten" onclick="tog(this)">Distraíble</span>
+    </div>
+    <div class="row"><span class="sl">Memoria:</span>
+      <span class="chip" data-g="mem" onclick="tog(this)">Sin alteraciones</span>
+      <span class="chip" data-g="mem" onclick="tog(this)">Amnesia anterógrada</span>
+      <span class="chip" data-g="mem" onclick="tog(this)">Amnesia retrógrada</span>
+    </div>
+    <div class="row"><span class="sl">Inteligencia:</span>
+      <span class="chip" data-g="intel" onclick="tog(this)">Normal</span>
+      <span class="chip" data-g="intel" onclick="tog(this)">Limítrofe</span>
+      <span class="chip" data-g="intel" onclick="tog(this)">No evaluable</span>
+      <span class="sl" style="margin-left:6px">Juicio:</span>
+      <span class="chip" data-g="juic" onclick="tog(this)">Conservado</span>
+      <span class="chip" data-g="juic" onclick="tog(this)">Deteriorado</span>
+      <span class="chip" data-g="juic" onclick="tog(this)">No evaluado</span>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="ct green"><span class="num green">7</span>Suicidabilidad</div>
+  <div class="row">
+    <span class="chip" data-g="suic_base" onclick="togSuic(this,'aus')">(–) Ausente</span>
+    <span class="chip red" data-g="suic_base" onclick="togSuic(this,'pres')">(+) Presente</span>
+  </div>
+  <div class="suic-sub" id="suic_detalle">
+    <div class="row" style="margin-bottom:3px">
+      <span class="sl">Tipo de ideación:</span>
+      <span class="tt"><span class="chip red" data-g="suic_tipo" onclick="tog(this)">Ideación pasiva</span><span class="tip">Deseos de no existir o de estar muerto, sin intención activa de hacerse daño. Ej: "preferiría no despertar".</span></span>
+      <span class="tt"><span class="chip red" data-g="suic_tipo" onclick="tog(this)">Ideación activa sin plan</span><span class="tip">Pensamientos activos de quitarse la vida, sin método ni plan definido. Mayor riesgo que la ideación pasiva.</span></span>
+      <span class="tt"><span class="chip red" data-g="suic_tipo" onclick="tog(this)">Ideación activa con plan</span><span class="tip">El paciente ha contemplado un método específico. Constituye una urgencia psiquiátrica.</span></span>
+    </div>
+    <div class="row" style="margin-bottom:3px">
+      <span class="sl">Antecedentes:</span>
+      <span class="chip red" data-g="suic_ant" onclick="tog(this)">Sin intentos previos</span>
+      <span class="chip red" data-g="suic_ant" onclick="tog(this)">Intento previo (rescatado)</span>
+      <span class="chip red" data-g="suic_ant" onclick="tog(this)">Intento reciente (&lt;3 meses)</span>
+    </div>
+    <div class="row" style="margin-bottom:3px">
+      <span class="sl">Método contemplado:</span>
+      <span class="chip red" data-g="suic_metodo" onclick="tog(this)">No especificado</span>
+      <span class="chip red" data-g="suic_metodo" onclick="tog(this)">Intoxicación medicamentosa</span>
+      <span class="chip red" data-g="suic_metodo" onclick="tog(this)">Arma cortopunzante</span>
+      <span class="chip red" data-g="suic_metodo" onclick="tog(this)">Arma de fuego</span>
+      <span class="chip red" data-g="suic_metodo" onclick="tog(this)">Ahorcamiento</span>
+      <span class="chip red" data-g="suic_metodo" onclick="tog(this)">Precipitación</span>
+      <span class="chip red" data-g="suic_metodo" onclick="tog(this)">Otro</span>
+    </div>
+    <div class="row" style="margin-bottom:3px">
+      <span class="sl">Acceso al método:</span>
+      <span class="chip red" data-g="suic_acceso" onclick="tog(this)">Sin acceso</span>
+      <span class="chip red" data-g="suic_acceso" onclick="tog(this)">Acceso limitado</span>
+      <span class="chip red" data-g="suic_acceso" onclick="tog(this)">Acceso inmediato</span>
+    </div>
+    <div class="row">
+      <span class="sl">Factores protectores:</span>
+      <span class="chip" data-g="suic_prot" onclick="tog(this)">Red de apoyo presente</span>
+      <span class="chip" data-g="suic_prot" onclick="tog(this)">Hijos / dependientes</span>
+      <span class="chip" data-g="suic_prot" onclick="tog(this)">Creencias religiosas</span>
+      <span class="chip" data-g="suic_prot" onclick="tog(this)">Vínculo terapéutico</span>
+      <span class="chip" data-g="suic_prot" onclick="tog(this)">Motivos de vida referidos</span>
+      <span class="chip" data-g="suic_prot" onclick="tog(this)">Sin factores protectores identificados</span>
+    </div>
+    <input id="f_suic_obs" class="obs" placeholder="Observaciones adicionales, plan de seguridad, contexto...">
+  </div>
+</div>
+
+<div class="card">
+  <div class="ct green"><span class="num green">8</span>Propositividad vital</div>
+  <div class="row">
+    <span class="chip" data-g="prop" onclick="tog(this)">Metas futuras presentes</span>
+    <span class="chip" data-g="prop" onclick="tog(this)">Proyectos referidos espontáneamente</span>
+    <span class="chip" data-g="prop" onclick="tog(this)">Sin proyección vital</span>
+    <span class="chip" data-g="prop" onclick="tog(this)">Pesimismo sobre el futuro</span>
+    <span class="chip" data-g="prop" onclick="tog(this)">Desesperanza</span>
+  </div>
+  <input id="f_prop_obs" class="obs" placeholder='Proyecto vital referido: ej. "le gustaría trabajar en..."'>
+</div>
+
+<div class="card">
+  <div class="ct green"><span class="num green">9</span>Lenguaje</div>
+  <div class="g2" style="gap:8px;margin-bottom:0">
+    <div>
+      <div class="row"><span class="sl">Forma:</span>
+        <span class="chip" data-g="leng_forma" onclick="tog(this)">Comunicativo</span>
+        <span class="chip" data-g="leng_forma" onclick="tog(this)">Coherente</span>
+        <span class="chip" data-g="leng_forma" onclick="tog(this)">Incoherente</span>
+        <span class="chip" data-g="leng_forma" onclick="tog(this)">Disgregado</span>
+        <span class="tt"><span class="chip" data-g="leng_forma" onclick="tog(this)">Notificativo</span><span class="tip">El paciente habla para informar sin intención real de comunicarse ni esperar respuesta. El lenguaje pierde su función social. Común en esquizofrenia.</span></span>
+      </div>
+      <div class="row"><span class="sl">Tono:</span>
+        <span class="chip" data-g="tono" onclick="tog(this)">Normal</span>
+        <span class="chip" data-g="tono" onclick="tog(this)">Elevado</span>
+        <span class="chip" data-g="tono" onclick="tog(this)">Bajo</span>
+        <span class="chip" data-g="tono" onclick="tog(this)">Monótono</span>
+      </div>
+      <div class="row"><span class="sl">Velocidad:</span>
+        <span class="chip" data-g="vel" onclick="tog(this)">Normal</span>
+        <span class="tt"><span class="chip" data-g="vel" onclick="tog(this)">Taquifemia</span><span class="tip">Aumento anormal de la velocidad del habla con sentido conservado. Frecuente en manía y ansiedad.</span></span>
+        <span class="tt"><span class="chip" data-g="vel" onclick="tog(this)">Bradilalia</span><span class="tip">Lentitud en la producción del habla. Frecuente en depresión y trastornos neurológicos.</span></span>
+      </div>
+    </div>
+    <div>
+      <div class="row"><span class="sl">Flujo del pensamiento:</span>
+        <span class="tt"><span class="chip" data-g="dipsia" onclick="tog(this)">Taquidipsia</span><span class="tip">Flujo de pensamientos acelerado: tiene más pensamientos de los que puede expresar. Asociada a manía.</span></span>
+        <span class="tt"><span class="chip" data-g="dipsia" onclick="tog(this)">Bradidipsia</span><span class="tip">Lentitud del flujo de pensamientos. Dificultad para generar ideas. Frecuente en depresión.</span></span>
+      </div>
+      <div class="row"><span class="sl">Alteraciones:</span>
+        <span class="tt"><span class="chip" data-g="leng_alt" onclick="tog(this)">Verborrea</span><span class="tip">Producción excesiva de palabras con dificultad para detener el discurso.</span></span>
+        <span class="tt"><span class="chip" data-g="leng_alt" onclick="tog(this)">Logorrea</span><span class="tip">Forma extrema de verborrea: producción verbal incontrolable e imposible de interrumpir. Característica de manía.</span></span>
+        <span class="chip" data-g="leng_alt" onclick="tog(this)">Mutismo</span>
+        <span class="chip" data-g="leng_alt" onclick="tog(this)">Pobreza del habla</span>
+        <span class="tt"><span class="chip" data-g="leng_alt" onclick="tog(this)">Palilalia</span><span class="tip">Repetición involuntaria y progresiva de las propias palabras o sílabas finales. Signo de daño extrapiramidal o demencia.</span></span>
+        <span class="tt"><span class="chip" data-g="leng_alt" onclick="tog(this)">Ecolalia</span><span class="tip">Repetición automática de palabras del interlocutor. Presente en esquizofrenia, TEA y lesiones frontales.</span></span>
+        <span class="chip" data-g="leng_alt" onclick="tog(this)">Neologismos</span>
+      </div>
+    </div>
+  </div>
+  <input id="f_leng_obs" class="obs" placeholder="Observaciones adicionales del lenguaje...">
+</div>
+
+<div class="card">
+  <div class="ct green"><span class="num green">10</span>Afectividad</div>
+  <div class="row"><span class="sl">Estado de ánimo:</span>
+    <span class="chip" data-g="animo" onclick="tog(this)">Eutímico</span>
+    <span class="chip" data-g="animo" onclick="tog(this)">Deprimido</span>
+    <span class="chip" data-g="animo" onclick="tog(this)">Ansioso</span>
+    <span class="chip" data-g="animo" onclick="tog(this)">Eufórico</span>
+    <span class="tt"><span class="chip" data-g="animo" onclick="tog(this)">Disfórico</span><span class="tip">Estado de ánimo desagradable con irritabilidad y tensión interna. Mezcla disfuncional. Frecuente en manía mixta, TLP y abstinencia.</span></span>
+    <span class="chip" data-g="animo" onclick="tog(this)">Irritable</span>
+    <span class="chip" data-g="animo" onclick="tog(this)">Expansivo</span>
+  </div>
+  <div class="row"><span class="sl">Expresión afectiva:</span>
+    <span class="chip" data-g="af_expr" onclick="tog(this)">Concordancia ideoafectiva conservada</span>
+    <span class="chip" data-g="af_expr" onclick="tog(this)">Discordancia ideoafectiva</span>
+    <span class="chip" data-g="af_expr" onclick="tog(this)">Afecto embotado</span>
+    <span class="chip" data-g="af_expr" onclick="tog(this)">Afecto lábil</span>
+    <span class="chip" data-g="af_expr" onclick="tog(this)">Afecto inapropiado</span>
+  </div>
+  <div class="row">
+    <span class="chip" data-g="af_esp" onclick="tog(this)">Angustia contenida</span>
+    <span class="chip" data-g="af_esp" onclick="tog(this)">Angustia manifiesta</span>
+    <span class="chip" data-g="af_esp" onclick="tog(this)">Anhedonia</span>
+    <span class="chip" data-g="af_esp" onclick="tog(this)">Apatía</span>
+    <span class="chip" data-g="af_esp" onclick="tog(this)">Ambivalencia afectiva</span>
+  </div>
+  <input id="f_af_obs" class="obs" placeholder="Observaciones de la afectividad...">
+</div>
+
+<div class="sec-title purple">V. Diagnóstico</div>
+<div class="dg-box">
+  <div class="dg-tit">Diagnóstico sindrómico</div>
+  <div class="row">
+    <span class="chip" data-g="sind" onclick="tog(this,'purple')">Sd. Esquizofrénico</span>
+    <span class="chip" data-g="sind" onclick="tog(this,'purple')">Sd. Maníaco</span>
+    <span class="chip" data-g="sind" onclick="tog(this,'purple')">Sd. Depresivo</span>
+    <span class="chip" data-g="sind" onclick="tog(this,'purple')">Sd. Ansioso</span>
+    <span class="chip" data-g="sind" onclick="tog(this,'purple')">Sd. Confusional agudo</span>
+    <span class="chip" data-g="sind" onclick="tog(this,'purple')">Sd. Disociativo</span>
+    <span class="chip" data-g="sind" onclick="tog(this,'purple')">Sd. Paranoide</span>
+    <span class="chip" data-g="sind" onclick="tog(this,'purple')">Sd. Mixto</span>
+    <span class="chip" data-g="sind" onclick="tog(this,'purple')">Sin síndrome aparente</span>
+  </div>
+  <input id="f_sind_obs" class="obs" placeholder="Argumentar síndrome basado en hallazgos del examen mental...">
+</div>
+<div class="dg-box">
+  <div class="dg-tit">Diagnóstico clínico</div>
+  <div class="row">
+    <span class="chip" data-g="dx" onclick="tog(this,'purple')">Esquizofrenia</span>
+    <span class="chip" data-g="dx" onclick="tog(this,'purple')">Trastorno esquizoafectivo</span>
+    <span class="chip" data-g="dx" onclick="tog(this,'purple')">TAB I</span>
+    <span class="chip" data-g="dx" onclick="tog(this,'purple')">TAB II</span>
+    <span class="chip" data-g="dx" onclick="tog(this,'purple')">Depresión mayor</span>
+    <span class="chip" data-g="dx" onclick="tog(this,'purple')">Depresión bipolar</span>
+    <span class="chip" data-g="dx" onclick="tog(this,'purple')">TAG</span>
+    <span class="chip" data-g="dx" onclick="tog(this,'purple')">TEPT</span>
+    <span class="chip" data-g="dx" onclick="tog(this,'purple')">TOC</span>
+    <span class="chip" data-g="dx" onclick="tog(this,'purple')">TLP</span>
+    <span class="chip" data-g="dx" onclick="tog(this,'purple')">Demencia</span>
+    <span class="chip" data-g="dx" onclick="tog(this,'purple')">Delírium</span>
+    <span class="chip" data-g="dx" onclick="tog(this,'purple')">Trastorno por sustancias</span>
+  </div>
+  <input id="f_dx_obs" class="obs" placeholder="Diagnóstico(s) CIE-11 / DSM-5 con argumentación clínica...">
+</div>
+
+<div class="actions-row">
+  <button class="gen-btn" onclick="generar()">⚙ Generar texto para ficha clínica</button>
+  <span class="gen-hint">Completa los chips y campos antes de generar</span>
+</div>
+
+<div class="output-box" id="outputBox">
+  <h3>
+    Texto generado — listo para copiar
+    <span>
+      <button class="copy-btn" onclick="copiar()">📋 Copiar texto</button>
+    </span>
+  </h3>
+  <div class="output-text" id="outputText"></div>
+</div>
+
+<div class="footer">
+  <div class="sign-row">
+    <div class="sign"><div class="sign-line"></div><span class="sign-label">Estudiante / Evaluador</span></div>
+    <div class="sign"><div class="sign-line"></div><span class="sign-label">Supervisor / Docente</span></div>
+  </div>
+</div>
+
+</div>
+</div>
+
+<div class="repo-foot">
+  Plantilla de uso educativo · Datos guardados localmente en este navegador · No almacena información en servidores externos
+</div>
+
+<script>
+// ═══════════════════ INTERACCIÓN BÁSICA ═══════════════════
+function tog(el,color){
+  el.classList.toggle('sel');
+  if(color==='purple') el.classList.toggle('purple');
+  guardar();
+}
+
+function togSuic(el,tipo){
+  document.querySelectorAll('[data-g="suic_base"]').forEach(function(c){c.classList.remove('sel');});
+  el.classList.add('sel');
+  document.getElementById('suic_detalle').classList.toggle('show', tipo==='pres');
+  if(tipo==='aus'){
+    ['suic_tipo','suic_ant','suic_metodo','suic_acceso','suic_prot'].forEach(function(g){
+      document.querySelectorAll('[data-g="'+g+'"]').forEach(function(c){c.classList.remove('sel');});
+    });
+    var obs=document.getElementById('f_suic_obs');
+    if(obs) obs.value='';
+  }
+  guardar();
+}
+
+function getSel(g){
+  return Array.from(document.querySelectorAll('[data-g="'+g+'"].sel')).map(function(e){return e.textContent.trim();});
+}
+function val(id){var el=document.getElementById(id);return el?el.value.trim():'';}
+function join(arr){
+  if(!arr||!arr.length) return '';
+  if(arr.length===1) return arr[0];
+  return arr.slice(0,-1).join(', ')+' y '+arr[arr.length-1];
+}
+function cap(s){return s?s.charAt(0).toUpperCase()+s.slice(1):s;}
+
+// ═══════════════════ TOAST ═══════════════════
+function showToast(msg){
+  var t=document.getElementById('toast');
+  t.textContent=msg;
+  t.classList.add('show');
+  setTimeout(function(){t.classList.remove('show');},2200);
+}
+
+// ═══════════════════ AUTOGUARDADO ═══════════════════
+var STORAGE_KEY='ficha_psiq_v4';
+function guardar(){
+  try{
+    var data={inputs:{},chips:[]};
+    document.querySelectorAll('input,textarea').forEach(function(el){
+      if(el.id) data.inputs[el.id]=el.value;
+    });
+    document.querySelectorAll('.chip.sel').forEach(function(c){
+      var g=c.getAttribute('data-g');
+      if(g) data.chips.push({g:g, txt:c.textContent.trim(), purple:c.classList.contains('purple')});
+    });
+    var sd=document.getElementById('suic_detalle');
+    data.suicShown = sd && sd.classList.contains('show');
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  }catch(e){console.warn('No se pudo guardar:',e);}
+}
+
+function restaurar(){
+  try{
+    var raw=localStorage.getItem(STORAGE_KEY);
+    if(!raw) return;
+    var data=JSON.parse(raw);
+    if(data.inputs){
+      Object.keys(data.inputs).forEach(function(id){
+        var el=document.getElementById(id);
+        if(el) el.value=data.inputs[id];
+      });
+    }
+    if(data.chips){
+      data.chips.forEach(function(item){
+        document.querySelectorAll('[data-g="'+item.g+'"]').forEach(function(c){
+          if(c.textContent.trim()===item.txt){
+            c.classList.add('sel');
+            if(item.purple) c.classList.add('purple');
+          }
+        });
+      });
+    }
+    if(data.suicShown){
+      var sd=document.getElementById('suic_detalle');
+      if(sd) sd.classList.add('show');
+    }
+  }catch(e){console.warn('No se pudo restaurar:',e);}
+}
+
+document.addEventListener('input',function(e){
+  if(e.target.matches('input,textarea')) guardar();
+});
+
+function resetForm(){
+  if(!confirm('¿Limpiar todos los campos y selecciones? Esta acción no se puede deshacer.')) return;
+  document.querySelectorAll('input,textarea').forEach(function(el){el.value='';});
+  document.querySelectorAll('.chip.sel').forEach(function(c){c.classList.remove('sel');c.classList.remove('purple');});
+  var sd=document.getElementById('suic_detalle');
+  if(sd) sd.classList.remove('show');
+  var ob=document.getElementById('outputBox');
+  if(ob) ob.classList.remove('show');
+  localStorage.removeItem(STORAGE_KEY);
+  showToast('Formulario limpiado');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+// ═══════════════════ GENERAR TEXTO ═══════════════════
+function generar(){
+  var nombre=val('f_nombre')||'El/la paciente';
+  var edad=val('f_edad'); var sexo=val('f_sexo'); var ecivil=val('f_ecivil');
+  var escolar=val('f_escolar'); var ocup=val('f_ocup');
+
+  var soma=getSel('soma'); var nutri=getSel('nutri'); var vest=getSel('vest');
+  var hig=getSel('hig'); var acces=val('f_acces'); var ap_obs=val('f_ap_obs');
+
+  var actitud=getSel('actitud'); var cv=getSel('cv'); var post=getSel('post'); var conda=getSel('conda');
+  var conc=getSel('conc'); var pm_niv=getSel('pm_niv'); var gest=getSel('gest'); var esp=getSel('esp');
+
+  var pens_est=getSel('pens_est'); var pens_cont=getSel('pens_cont');
+  var tipo_del=getSel('tipo_del'); var pens_obs=val('f_pens_obs');
+
+  var perc=getSel('perc'); var voz=getSel('voz'); var perc_obs=val('f_perc_obs');
+
+  var conc_niv=getSel('conc_niv'); var lucid=getSel('lucid'); var orient=getSel('orient');
+  var aten=getSel('aten'); var mem=getSel('mem'); var intel=getSel('intel'); var juic=getSel('juic');
+
+  var suic_base=getSel('suic_base');
+  var suic_tipo=getSel('suic_tipo'); var suic_ant=getSel('suic_ant');
+  var suic_metodo=getSel('suic_metodo'); var suic_acceso=getSel('suic_acceso');
+  var suic_prot=getSel('suic_prot'); var suic_obs=val('f_suic_obs');
+
+  var prop=getSel('prop'); var prop_obs=val('f_prop_obs');
+
+  var leng_forma=getSel('leng_forma'); var tono=getSel('tono'); var vel=getSel('vel');
+  var dipsia=getSel('dipsia'); var leng_alt=getSel('leng_alt'); var leng_obs=val('f_leng_obs');
+
+  var animo=getSel('animo'); var af_expr=getSel('af_expr');
+  var af_esp=getSel('af_esp'); var af_obs=val('f_af_obs');
+
+  var sind=getSel('sind'); var sind_obs=val('f_sind_obs');
+  var dx=getSel('dx'); var dx_obs=val('f_dx_obs');
+
+  var parts=[];
+
+  // §1 Apariencia
+  var id_parts=[];
+  if(edad) id_parts.push(edad+' años');
+  if(sexo) id_parts.push(sexo);
+  if(ecivil) id_parts.push(ecivil);
+  if(escolar) id_parts.push('escolaridad '+escolar);
+  if(ocup) id_parts.push('ocupación '+ocup);
+  var p1=cap(nombre)+(id_parts.length?', '+id_parts.join(', '):'')+'.';
+  var ap_parts=[];
+  if(soma.length) ap_parts.push('biotipo '+join(soma).toLowerCase());
+  if(nutri.length) ap_parts.push(join(nutri).toLowerCase());
+  if(vest.length) ap_parts.push('vestimenta '+join(vest).toLowerCase());
+  if(hig.length) ap_parts.push('higiene personal '+join(hig).toLowerCase());
+  if(acces) ap_parts.push('uso de accesorios: '+acces);
+  if(ap_obs) ap_parts.push(ap_obs);
+  if(ap_parts.length) p1+=' Al ingreso se aprecia un/a paciente de '+ap_parts.join(', ')+'.';
+  parts.push(p1);
+
+  // §2 Conducta + Psicomotricidad
+  var cond_parts=[];
+  if(actitud.length) cond_parts.push(join(actitud).toLowerCase());
+  if(post.length) cond_parts.push('con postura '+join(post).toLowerCase());
+  if(cv.length) cond_parts.push('con contacto visual '+join(cv).toLowerCase());
+  if(conda.length&&!conda.includes('Sin alteraciones conductuales')) cond_parts.push(join(conda).toLowerCase());
+  var pm_parts=[];
+  if(conc.length) pm_parts.push(join(conc).toLowerCase());
+  if(pm_niv.length&&!pm_niv.includes('Normal')) pm_parts.push(join(pm_niv).toLowerCase());
+  else if(pm_niv.includes('Normal')) pm_parts.push('nivel psicomotor normal');
+  if(gest.length) pm_parts.push(join(gest).toLowerCase());
+  if(esp.length) pm_parts.push(join(esp).toLowerCase());
+  var p2='Durante la entrevista, '+nombre.toLowerCase()+' se muestra '+(cond_parts.length?cond_parts.join(', '):'sin alteraciones conductuales evidentes')+'. En cuanto a la psicomotricidad, '+(pm_parts.length?pm_parts.join(', '):'no se evidencian alteraciones psicomotoras')+'.';
+  parts.push(p2);
+
+  // §3 Pensamiento
+  var pens_parts=[];
+  var est_alter=pens_est.filter(function(p){return p!=='Sin alteraciones';});
+  if(pens_est.includes('Sin alteraciones')&&est_alter.length===0) pens_parts.push('la estructura del pensamiento se encuentra sin alteraciones');
+  else if(est_alter.length) pens_parts.push('alteración de la estructura del pensamiento: '+join(est_alter).toLowerCase());
+  else pens_parts.push('la estructura del pensamiento no fue evaluada');
+  var cont_alter=pens_cont.filter(function(p){return p!=='Sin alteraciones';});
+  if(pens_cont.includes('Sin alteraciones')&&cont_alter.length===0) pens_parts.push('el contenido del pensamiento sin alteraciones');
+  else if(cont_alter.length){
+    var cs='alteración del contenido: '+join(cont_alter).toLowerCase();
+    if(tipo_del.length) cs+=', de tipo '+join(tipo_del).toLowerCase();
+    pens_parts.push(cs);
+  } else pens_parts.push('el contenido del pensamiento no fue evaluado');
+  var p3='Respecto al pensamiento, se observa '+pens_parts[0]+'; '+pens_parts.slice(1).join('. ');
+  if(pens_obs) p3+=' '+cap(pens_obs);
+  parts.push(p3.replace(/\.+$/,'')+'.');
+
+  // §4 Percepción
+  var percSA=perc.includes('Sin alteraciones');
+  var percAlter=perc.filter(function(p){return p!=='Sin alteraciones';});
+  var p4='';
+  if(percSA&&percAlter.length===0) p4='No se constatan alteraciones de la percepción durante la entrevista.';
+  else if(percAlter.length){
+    p4='En el área de la percepción se constatan '+join(percAlter).toLowerCase();
+    if(voz.length) p4+=', de carácter '+join(voz).toLowerCase();
+    p4+='.';
+    if(perc_obs) p4+=' '+cap(perc_obs)+'.';
+  } else p4='Las alteraciones perceptuales no fueron indagadas en esta instancia.';
+  parts.push(p4);
+
+  // §5 Conciencia + FCS
+  var consc_parts=[];
+  if(conc_niv.length) consc_parts.push(nombre.toLowerCase()+' se encuentra '+join(conc_niv).toLowerCase());
+  if(lucid.length) consc_parts.push('con lucidez '+join(lucid).toLowerCase());
+  if(orient.length){
+    if(orient.includes('T/E/P conservada')) consc_parts.push('orientado/a en tiempo, espacio y persona');
+    else consc_parts.push(join(orient).toLowerCase());
+  }
+  if(!consc_parts.length) consc_parts.push(nombre.toLowerCase()+' en estado de conciencia no evaluado');
+  var fcs_parts=[];
+  if(aten.length) fcs_parts.push(aten.includes('Sin alteraciones')?'atención sin alteraciones':join(aten).toLowerCase());
+  else fcs_parts.push('atención no evaluada');
+  if(mem.length) fcs_parts.push(mem.includes('Sin alteraciones')?'memoria conservada':join(mem).toLowerCase());
+  else fcs_parts.push('memoria no evaluada');
+  if(intel.length) fcs_parts.push('inteligencia '+join(intel).toLowerCase());
+  if(juic.length) fcs_parts.push('juicio '+join(juic).toLowerCase());
+  var p5=cap(consc_parts.join(', '))+'. Las funciones cognitivas superiores evidencian '+fcs_parts.join(', ')+'.';
+  parts.push(p5);
+
+  // §6 Suicidabilidad
+  var p6='';
+  if(suic_base.includes('(–) Ausente')){
+    p6='La suicidabilidad es negativa al momento de la entrevista.';
+  } else if(suic_base.includes('(+) Presente')){
+    p6='Se constata suicidabilidad presente.';
+    if(suic_tipo.length) p6+=' Se identifica '+join(suic_tipo).toLowerCase()+'.';
+    var no_antec=suic_ant.includes('Sin intentos previos');
+    var antec=suic_ant.filter(function(a){return a!=='Sin intentos previos';});
+    if(no_antec) p6+=' Sin antecedentes de intentos previos.';
+    else if(antec.length) p6+=' Antecedente de '+join(antec).toLowerCase()+'.';
+    var metodo=suic_metodo.filter(function(m){return m!=='No especificado';});
+    if(metodo.length) p6+=' Método contemplado: '+join(metodo).toLowerCase()+'.';
+    if(suic_acceso.length) p6+=' Acceso al método: '+join(suic_acceso).toLowerCase()+'.';
+    var prot=suic_prot.filter(function(p){return p!=='Sin factores protectores identificados';});
+    var sinProt=suic_prot.includes('Sin factores protectores identificados');
+    if(sinProt) p6+=' No se identifican factores protectores.';
+    else if(prot.length) p6+=' Como factores protectores se identifican: '+join(prot).toLowerCase()+'.';
+    if(suic_obs) p6+=' '+cap(suic_obs)+'.';
+  } else {
+    p6='La suicidabilidad no fue evaluada en esta instancia.';
+  }
+  parts.push(p6);
+
+  // §7 Propositividad
+  var p7='';
+  if(prop.length) p7='En relación a la propositividad vital, el/la paciente presenta '+join(prop).toLowerCase()+'.';
+  else p7='La propositividad vital no fue explorada en esta instancia.';
+  if(prop_obs) p7+=' '+cap(prop_obs)+'.';
+  parts.push(p7);
+
+  // §8 Lenguaje
+  var leng_parts=[];
+  if(leng_forma.length) leng_parts.push(join(leng_forma).toLowerCase());
+  if(tono.length) leng_parts.push('de tono '+join(tono).toLowerCase());
+  if(vel.length) leng_parts.push('velocidad '+join(vel).toLowerCase());
+  if(dipsia.length) leng_parts.push('con '+join(dipsia).toLowerCase()+' al explorar el flujo del pensamiento');
+  var p8='';
+  if(leng_parts.length||leng_alt.length){
+    p8='El lenguaje es '+(leng_parts.length?leng_parts.join(', '):'no evaluado en detalle')+'.';
+    if(leng_alt.length) p8+=' Se evidencia además '+join(leng_alt).toLowerCase()+'.';
+  } else p8='No se evidencian alteraciones significativas del lenguaje.';
+  if(leng_obs) p8+=' '+cap(leng_obs)+'.';
+  parts.push(p8);
+
+  // §9 Afectividad
+  var af_parts=[];
+  if(animo.length) af_parts.push('estado de ánimo '+join(animo).toLowerCase());
+  if(af_expr.length) af_parts.push(join(af_expr).toLowerCase());
+  if(af_esp.length) af_parts.push(join(af_esp).toLowerCase());
+  var p9=af_parts.length?'En el área afectiva se aprecia '+af_parts.join(', ')+'.':'No se evidencian alteraciones significativas de la afectividad.';
+  if(af_obs) p9+=' '+cap(af_obs)+'.';
+  parts.push(p9);
+
+  // §10 Diagnóstico
+  var p10='';
+  if(sind.length||dx.length){
+    if(sind.length) p10+='En base a los hallazgos del examen mental, se plantea como diagnóstico sindrómico '+join(sind).toLowerCase()+'.';
+    if(sind_obs) p10+=' '+cap(sind_obs)+'.';
+    if(dx.length) p10+=' El diagnóstico clínico impresiona como '+join(dx)+'.';
+    if(dx_obs) p10+=' '+cap(dx_obs)+'.';
+  }
+  if(p10) parts.push(p10.trim());
+
+  var texto=parts.filter(function(p){return p&&p.length>3;}).join('\n\n');
+  document.getElementById('outputText').textContent=texto;
+  document.getElementById('outputBox').classList.add('show');
+  document.getElementById('outputBox').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+// ═══════════════════ COPIAR ═══════════════════
+function copiar(){
+  var txt=document.getElementById('outputText').textContent;
+  if(!txt){showToast('Primero genera el texto');return;}
+  navigator.clipboard.writeText(txt).then(function(){
+    showToast('✓ Texto copiado al portapapeles');
+  }).catch(function(){
+    showToast('No se pudo copiar — selecciona y copia manualmente');
+  });
+}
+
+// ═══════════════════ DESCARGA PDF ═══════════════════
+async function descargarPDF(){
+  var overlay=document.getElementById('pdfOverlay');
+  overlay.classList.add('show');
+  document.body.classList.add('pdf-mode');
+
+  try{
+    // Esperar un tick para que el CSS se aplique
+    await new Promise(function(r){setTimeout(r,150);});
+
+    var sheet=document.getElementById('sheet');
+    var canvas=await html2canvas(sheet,{
+      scale:2,
+      useCORS:true,
+      backgroundColor:'#ffffff',
+      windowWidth:sheet.scrollWidth,
+      windowHeight:sheet.scrollHeight
+    });
+
+    var { jsPDF } = window.jspdf;
+    var pdf=new jsPDF('p','mm','a4');
+    var pageW=pdf.internal.pageSize.getWidth();
+    var pageH=pdf.internal.pageSize.getHeight();
+    var margin=8;
+    var availW=pageW-(margin*2);
+    var imgH=(canvas.height*availW)/canvas.width;
+
+    var imgData=canvas.toDataURL('image/jpeg',0.92);
+
+    // Si cabe en una página
+    if(imgH<=pageH-(margin*2)){
+      pdf.addImage(imgData,'JPEG',margin,margin,availW,imgH);
+    } else {
+      // Multipágina
+      var pageContentH=pageH-(margin*2);
+      var pxPerMM=canvas.width/availW;
+      var sliceHeightPx=pageContentH*pxPerMM;
+      var totalSlices=Math.ceil(canvas.height/sliceHeightPx);
+
+      for(var i=0;i<totalSlices;i++){
+        var sliceCanvas=document.createElement('canvas');
+        sliceCanvas.width=canvas.width;
+        var thisSliceHeight=Math.min(sliceHeightPx, canvas.height-(i*sliceHeightPx));
+        sliceCanvas.height=thisSliceHeight;
+        var ctx=sliceCanvas.getContext('2d');
+        ctx.fillStyle='#ffffff';
+        ctx.fillRect(0,0,sliceCanvas.width,sliceCanvas.height);
+        ctx.drawImage(canvas, 0,-i*sliceHeightPx);
+        var sliceData=sliceCanvas.toDataURL('image/jpeg',0.92);
+        var sliceImgH=(thisSliceHeight*availW)/canvas.width;
+        if(i>0) pdf.addPage();
+        pdf.addImage(sliceData,'JPEG',margin,margin,availW,sliceImgH);
+      }
+    }
+
+    var nombre=val('f_nombre')||'paciente';
+    var fecha=val('f_fecha')||new Date().toISOString().slice(0,10);
+    var filename='ficha_psiquiatria_'+nombre.replace(/[^a-zA-Z0-9]/g,'_')+'_'+fecha.replace(/\//g,'-')+'.pdf';
+    pdf.save(filename);
+    showToast('✓ PDF descargado correctamente');
+  }catch(err){
+    console.error(err);
+    showToast('Error al generar PDF');
+  } finally {
+    document.body.classList.remove('pdf-mode');
+    overlay.classList.remove('show');
+  }
+}
+
+// ═══════════════════ INICIALIZACIÓN ═══════════════════
+window.addEventListener('DOMContentLoaded', function(){
+  restaurar();
+});
+</script>
+</body>
+</html>
